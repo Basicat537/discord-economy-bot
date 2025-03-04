@@ -22,7 +22,7 @@ async def load_extensions():
     """Load all cog extensions"""
     await bot.load_extension("cogs.economy")
     await bot.load_extension("cogs.admin")
-    await bot.load_extension("cogs.minecraft")  # Added Minecraft cog
+    # Removed Minecraft cog loading
 
 @bot.event
 async def on_ready():

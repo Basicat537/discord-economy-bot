@@ -2,7 +2,7 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 from utils.config import DEFAULT_BALANCE, ERRORS, CURRENCY
-from utils.permissions import has_permission_level
+from utils.permissions import has_command_permission
 
 class Economy(commands.Cog):
     """Economy system implementation"""
@@ -28,6 +28,7 @@ class Economy(commands.Cog):
         name='balance',
         description='Показать баланс вашего счета'
     )
+    @has_command_permission('balance')
     async def balance(self, interaction: discord.Interaction):
         """Show user balance command"""
         balance = self.get_balance(interaction.user.id)
@@ -51,6 +52,7 @@ class Economy(commands.Cog):
         user='Получатель перевода',
         amount='Сумма перевода'
     )
+    @has_command_permission('send')
     async def transfer(
         self,
         interaction: discord.Interaction,
@@ -105,6 +107,7 @@ class Economy(commands.Cog):
         name='top',
         description='Показать список богатейших пользователей'
     )
+    @has_command_permission('top')
     async def top(self, interaction: discord.Interaction):
         """Show top richest users"""
         if not self.accounts:

@@ -5,10 +5,11 @@ from .config import REQUIRED_ROLES, PERMISSION_LEVELS, ERRORS, COMMAND_PERMISSIO
 def get_user_permission_level(member: discord.Member) -> int:
     """Calculate user's permission level based on their roles"""
     user_roles = [role.name for role in member.roles]
-    user_level = PERMISSION_LEVELS['DEFAULT']
+    user_level = PERMISSION_LEVELS['DEFAULT']  # Start with default level
 
+    # Only check actual roles, skip DEFAULT since it's just a base level
     for role_name, level in PERMISSION_LEVELS.items():
-        if REQUIRED_ROLES[role_name] in user_roles:
+        if role_name != 'DEFAULT' and REQUIRED_ROLES.get(role_name, '') in user_roles:
             user_level = max(user_level, level)
 
     return user_level
@@ -28,7 +29,7 @@ def check_command_permission(command_name: str, member: discord.Member) -> bool:
     # Check specific roles
     user_roles = [role.name for role in member.roles]
     for role_name in permission['roles']:
-        if REQUIRED_ROLES[role_name] in user_roles:
+        if REQUIRED_ROLES.get(role_name, '') in user_roles:
             return True
 
     return False

@@ -43,16 +43,6 @@ COMMAND_PERMISSIONS = {
     'get_command_permissions': {'level': 3, 'roles': ['ADMIN']}
 }
 
-# Minecraft server settings
-MINECRAFT_CONFIG = {
-    'SERVER_ADDRESS': os.getenv('MINECRAFT_SERVER', 'localhost:25565'),
-    'UPDATE_INTERVAL': 60,  # Интервал обновления статуса в секундах
-    'REWARDS': {
-        'PER_HOUR': 100,  # Награда за час игры
-        'MIN_TIME': 30  # Минимальное время для получения награды (в минутах)
-    }
-}
-
 # Error messages
 ERRORS = {
     'INSUFFICIENT_FUNDS': '❌ Недостаточно средств на счете!',
