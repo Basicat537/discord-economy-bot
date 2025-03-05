@@ -1,7 +1,7 @@
 import discord
 from discord.ext import commands
 from discord import app_commands
-from utils.config import DEFAULT_BALANCE, ERRORS, CURRENCY
+from utils.config import DEFAULT_BALANCE, ERRORS, CURRENCY, SERVICE_LEVELS
 from utils.permissions import has_command_permission
 
 class Economy(commands.Cog):
@@ -16,6 +16,15 @@ class Economy(commands.Cog):
         if user_id not in self.accounts:
             self.accounts[user_id] = DEFAULT_BALANCE
         return self.accounts[user_id]
+
+    def get_user_level(self, balance: int) -> dict:
+        """Get user's service level based on balance"""
+        user_level = None
+        for level in reversed(SERVICE_LEVELS['levels']):
+            if balance >= level['required_balance']:
+                user_level = level
+                break
+        return user_level
 
     def format_amount(self, amount: int) -> str:
         """Format amount with currency"""
@@ -32,16 +41,29 @@ class Economy(commands.Cog):
     async def balance(self, interaction: discord.Interaction):
         """Show user balance command"""
         balance = self.get_balance(interaction.user.id)
+        user_level = self.get_user_level(balance)
+
         embed = discord.Embed(
             title="Информация о счете",
-            color=discord.Color.blue()
+            color=discord.Color(user_level['color'] if user_level else SERVICE_LEVELS['default_color'])
         )
+
+        # Basic info
         embed.add_field(name="Владелец", value=interaction.user.name, inline=False)
         embed.add_field(
             name="Баланс",
             value=f"{CURRENCY['SYMBOL']} {self.format_amount(balance)}",
             inline=False
         )
+
+        # Level info if exists
+        if user_level:
+            embed.add_field(
+                name="Уровень обслуживания",
+                value=f"{user_level['emoji']} {user_level['name']}",
+                inline=False
+            )
+
         await interaction.response.send_message(embed=embed)
 
     @app_commands.command(
@@ -145,6 +167,72 @@ class Economy(commands.Cog):
             embed.set_footer(text=f"Всего пользователей в списке: {len(self.accounts)}")
 
         await interaction.response.send_message(embed=embed)
+
+    @app_commands.command(
+        name='level',
+        description='Информация об уровнях обслуживания'
+    )
+    @app_commands.describe(
+        level_id='ID уровня для подробной информации'
+    )
+    @has_command_permission('level')
+    async def level(self, interaction: discord.Interaction, level_id: int = None):
+        """Show service level information"""
+        if level_id is not None:
+            # Show specific level info
+            level = next((l for l in SERVICE_LEVELS['levels'] if l['id'] == level_id), None)
+            if not level:
+                await interaction.response.send_message(
+                    ERRORS['LEVEL_NOT_FOUND'],
+                    ephemeral=True
+                )
+                return
+
+            embed = discord.Embed(
+                title=f"Уровень {level['emoji']} {level['name']}",
+                color=discord.Color(level['color'])
+            )
+            embed.add_field(
+                name="Требуемый баланс",
+                value=self.format_amount(level['required_balance']),
+                inline=False
+            )
+            embed.add_field(
+                name="Привилегии",
+                value="\n".join(f"• {benefit}" for benefit in level['benefits']),
+                inline=False
+            )
+        else:
+            # Show all levels overview
+            embed = discord.Embed(
+                title="📊 Уровни обслуживания",
+                description="Список всех доступных уровней",
+                color=discord.Color(SERVICE_LEVELS['default_color'])
+            )
+
+            current_balance = self.get_balance(interaction.user.id)
+            current_level = self.get_user_level(current_balance)
+
+            for level in SERVICE_LEVELS['levels']:
+                status = ""
+                if current_level and level['id'] == current_level['id']:
+                    status = "✅ Текущий уровень"
+                elif current_balance >= level['required_balance']:
+                    status = "✓ Доступен"
+                else:
+                    remaining = level['required_balance'] - current_balance
+                    status = f"Требуется еще {self.format_amount(remaining)}"
+
+                embed.add_field(
+                    name=f"{level['emoji']} {level['name']} (ID: {level['id']})",
+                    value=f"Требуемый баланс: {self.format_amount(level['required_balance'])}\n{status}",
+                    inline=False
+                )
+
+            embed.set_footer(text="Используйте /level <ID> для подробной информации об уровне")
+
+        await interaction.response.send_message(embed=embed)
+
 
 async def setup(bot):
     await bot.add_cog(Economy(bot))

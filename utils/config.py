@@ -2,7 +2,7 @@ import os
 
 # Bot configuration
 PREFIX = '/'
-DEFAULT_BALANCE = 1000  # Changed to give users starting money
+DEFAULT_BALANCE = 1000  # Starting balance
 
 # Currency settings
 CURRENCY = {
@@ -11,11 +11,51 @@ CURRENCY = {
     'FORMAT': '{amount:,} {currency}'  # Example: "1,000 монет"
 }
 
+# Service levels configuration
+SERVICE_LEVELS = {
+    'levels': [
+        {
+            'id': 1,
+            'name': 'Бронзовый',
+            'emoji': '🥉',
+            'required_balance': 10000,
+            'color': 0xCD7F32,
+            'benefits': [
+                'Ежедневный бонус: 100 монет',
+                'Множитель наград: 1.1x'
+            ]
+        },
+        {
+            'id': 2,
+            'name': 'Серебряный',
+            'emoji': '🥈',
+            'required_balance': 50000,
+            'color': 0xC0C0C0,
+            'benefits': [
+                'Ежедневный бонус: 300 монет',
+                'Множитель наград: 1.25x'
+            ]
+        },
+        {
+            'id': 3,
+            'name': 'Золотой',
+            'emoji': '🥇',
+            'required_balance': 100000,
+            'color': 0xFFD700,
+            'benefits': [
+                'Ежедневный бонус: 500 монет',
+                'Множитель наград: 1.5x'
+            ]
+        }
+    ],
+    'default_color': 0x7289DA
+}
+
 # Role settings
 REQUIRED_ROLES = {
-    'ADMIN': 'Admin',       # Role name for admin commands
-    'MODERATOR': 'Moderator', # Role name for moderation commands
-    'VIP': 'VIP'           # Role name for VIP features
+    'ADMIN': 'Admin',
+    'MODERATOR': 'Moderator',
+    'VIP': 'VIP'
 }
 
 # Permission levels (higher number = more permissions)
@@ -28,19 +68,22 @@ PERMISSION_LEVELS = {
 
 # Command permissions configuration
 COMMAND_PERMISSIONS = {
-    # Economy commands
+    # Basic commands
+    'help': {'level': 0, 'roles': []},
     'balance': {'level': 0, 'roles': []},
     'send': {'level': 0, 'roles': []},
     'top': {'level': 0, 'roles': []},
+    'level': {'level': 0, 'roles': []},
 
     # Admin commands
     'admin_set': {'level': 3, 'roles': ['ADMIN']},
     'admin_reset': {'level': 3, 'roles': ['ADMIN']},
     'set_currency': {'level': 3, 'roles': ['ADMIN']},
-
-    # Permission management
-    'set_command_permission': {'level': 3, 'roles': ['ADMIN']},
-    'get_command_permissions': {'level': 3, 'roles': ['ADMIN']}
+    'set_permission': {'level': 3, 'roles': ['ADMIN']},
+    'get_command_permissions': {'level': 3, 'roles': ['ADMIN']},
+    'add_level': {'level': 3, 'roles': ['ADMIN']},
+    'edit_level': {'level': 3, 'roles': ['ADMIN']},
+    'remove_level': {'level': 3, 'roles': ['ADMIN']}
 }
 
 # Error messages
@@ -51,5 +94,7 @@ ERRORS = {
     'NO_PERMISSION': '❌ У вас нет прав для выполнения этой команды!',
     'ROLE_NOT_FOUND': '❌ Требуемая роль не найдена на сервере!',
     'INVALID_PERMISSION_LEVEL': '❌ Неверный уровень прав доступа!',
-    'COMMAND_NOT_FOUND': '❌ Команда не найдена!'
+    'COMMAND_NOT_FOUND': '❌ Команда не найдена!',
+    'LEVEL_NOT_FOUND': '❌ Указанный уровень не найден!',
+    'INVALID_LEVEL_ID': '❌ Неверный ID уровня!'
 }
