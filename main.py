@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from utils.config import PREFIX
 from utils.database import Base, engine  # Import database components
 from sqlalchemy import inspect
+import sys
 
 # Load environment variables
 load_dotenv()
@@ -14,12 +15,16 @@ if not TOKEN:
     raise ValueError("DISCORD_TOKEN environment variable is not set!")
 
 # Initialize database tables
-print("Creating database tables...")
-Base.metadata.create_all(bind=engine)
-inspector = inspect(engine)
-table_names = inspector.get_table_names()
-print("Created tables:", table_names)
-print("Database tables created successfully")
+print("Creating database tables...", file=sys.stderr)
+try:
+    Base.metadata.create_all(bind=engine)
+    inspector = inspect(engine)
+    table_names = inspector.get_table_names()
+    print("Created tables:", table_names, file=sys.stderr)
+    print("Database tables created successfully!", file=sys.stderr)
+except Exception as e:
+    print(f"Failed to create database tables: {e}", file=sys.stderr)
+    raise
 
 # Initialize bot with required intents
 intents = discord.Intents.default()
@@ -37,7 +42,7 @@ async def load_extensions():
         await bot.load_extension("cogs.admin")
         print("All cogs loaded successfully")
     except Exception as e:
-        print(f"Error loading cogs: {e}")
+        print(f"Error loading cogs: {e}", file=sys.stderr)
         raise  # Re-raise to handle in on_ready
 
 @bot.event
@@ -51,13 +56,13 @@ async def on_ready():
         print("Successfully synced application commands")
         print("Bot is fully ready!")
     except Exception as e:
-        print(f"An error occurred during setup: {e}")
+        print(f"An error occurred during setup: {e}", file=sys.stderr)
         return  # Exit early if setup fails
 
 @bot.event
 async def on_command_error(ctx, error):
     """Global error handler for commands"""
-    print(f"Command error occurred: {type(error).__name__} - {str(error)}")
+    print(f"Command error occurred: {type(error).__name__} - {str(error)}", file=sys.stderr)
 
     if isinstance(error, commands.errors.CheckFailure):
         await ctx.send('❌ У вас нет прав для выполнения этой команды.')
@@ -72,9 +77,9 @@ async def on_command_error(ctx, error):
 
 if __name__ == "__main__":
     try:
-        print("Starting bot...")
+        print("Starting bot...", file=sys.stderr)
         bot.run(TOKEN)
     except discord.errors.LoginFailure:
-        print("Failed to login: Invalid token")
+        print("Failed to login: Invalid token", file=sys.stderr)
     except Exception as e:
-        print(f"An error occurred: {e}")
+        print(f"An error occurred: {e}", file=sys.stderr)

@@ -3,8 +3,11 @@ from discord.ext import commands
 from discord import app_commands
 from utils.config import DEFAULT_BALANCE, ERRORS, CURRENCY
 from utils.permissions import has_command_permission
-from utils.database import get_db, UserProfile, ServiceLevel, Transaction # Added import for database interaction and models
+from utils.database import get_db, UserProfile, ServiceLevel, Transaction
+from sqlalchemy import desc
+from sqlalchemy.exc import SQLAlchemyError
 import json
+import sys
 
 class Admin(commands.Cog):
     """Admin commands implementation"""
@@ -48,52 +51,62 @@ class Admin(commands.Cog):
 
         benefits_list = [b.strip() for b in benefits.split(',')]
 
-        db = next(get_db())
         try:
-            # Проверяем, существует ли уже уровень с таким required_balance для этого сервера
-            existing_level = db.query(ServiceLevel).filter(
-                ServiceLevel.guild_id == interaction.guild_id,
-                ServiceLevel.required_balance == required_balance
-            ).first()
+            with get_db() as db:
+                # Проверяем, существует ли уже уровень с таким required_balance для этого сервера
+                existing_level = db.query(ServiceLevel).filter(
+                    ServiceLevel.guild_id == interaction.guild_id,
+                    ServiceLevel.required_balance == required_balance
+                ).first()
 
-            if existing_level:
-                await interaction.response.send_message(
-                    f'❌ Уровень с требуемым балансом {required_balance} уже существует!',
-                    ephemeral=True
+                if existing_level:
+                    await interaction.response.send_message(
+                        f'❌ Уровень с требуемым балансом {required_balance} уже существует!',
+                        ephemeral=True
+                    )
+                    return
+
+                new_level = ServiceLevel(
+                    guild_id=interaction.guild_id,
+                    name=name,
+                    emoji=emoji,
+                    required_balance=required_balance,
+                    color=color_int,
+                    benefits=json.dumps(benefits_list)
                 )
-                return
+                db.add(new_level)
+                db.commit()
 
-            new_level = ServiceLevel(
-                guild_id=interaction.guild_id,
-                name=name,
-                emoji=emoji,
-                required_balance=required_balance,
-                color=color_int,
-                benefits=json.dumps(benefits_list)
-            )
-            db.add(new_level)
-            db.commit()
+                embed = discord.Embed(
+                    title="✅ Уровень добавлен",
+                    color=discord.Color(color_int)
+                )
+                embed.add_field(name="ID", value=str(new_level.id), inline=True)
+                embed.add_field(name="Название", value=f"{emoji} {name}", inline=True)
+                embed.add_field(
+                    name="Требуемый баланс",
+                    value=f"{required_balance:,} {CURRENCY['NAME']}",
+                    inline=True
+                )
+                embed.add_field(
+                    name="Привилегии",
+                    value="\n".join(f"• {b}" for b in benefits_list),
+                    inline=False
+                )
 
-            embed = discord.Embed(
-                title="✅ Уровень добавлен",
-                color=discord.Color(color_int)
+                await interaction.response.send_message(embed=embed)
+        except SQLAlchemyError as e:
+            print(f"Database error in add_level: {str(e)}", file=sys.stderr)
+            await interaction.response.send_message(
+                "❌ Произошла ошибка при добавлении уровня",
+                ephemeral=True
             )
-            embed.add_field(name="ID", value=str(new_level.id), inline=True)
-            embed.add_field(name="Название", value=f"{emoji} {name}", inline=True)
-            embed.add_field(
-                name="Требуемый баланс",
-                value=f"{required_balance:,} {CURRENCY['NAME']}",
-                inline=True
+        except Exception as e:
+            print(f"Unexpected error in add_level: {str(e)}", file=sys.stderr)
+            await interaction.response.send_message(
+                "❌ Произошла неожиданная ошибка",
+                ephemeral=True
             )
-            embed.add_field(
-                name="Привилегии",
-                value="\n".join(f"• {b}" for b in benefits_list),
-                inline=False
-            )
-
-            await interaction.response.send_message(embed=embed)
-        finally:
-            db.close()
 
     @app_commands.command(
         name='edit_level',
