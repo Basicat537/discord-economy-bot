@@ -10,4 +10,5 @@ dependencies = [
     "psycopg2-binary>=2.9.10",
     "python-dotenv>=1.0.1",
     "sqlalchemy>=2.0.38",
+    "twilio>=9.4.6",
 ]
