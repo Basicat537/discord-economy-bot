@@ -80,9 +80,12 @@ class Economy(commands.Cog):
 
     @app_commands.command(
         name='balance',
-        description='Показать баланс вашего счета'
+        description='Показать баланс счета'
     )
-    async def balance(self, interaction: discord.Interaction):
+    @app_commands.describe(
+        user='Пользователь (опционально)'
+    )
+    async def balance(self, interaction: discord.Interaction, user: discord.Member = None):
         """Show user balance command"""
         try:
             print(f"Balance command called by {interaction.user.name}")
@@ -94,7 +97,10 @@ class Economy(commands.Cog):
                 )
                 return
 
-            balance = self.get_balance(interaction.user.id, interaction.guild_id)
+            # If no user specified, show own balance
+            target_user = user or interaction.user
+
+            balance = self.get_balance(target_user.id, interaction.guild_id)
             user_level = self.get_user_level(balance, interaction.guild_id)
 
             embed = discord.Embed(
@@ -102,7 +108,7 @@ class Economy(commands.Cog):
                 color=discord.Color(user_level['color'] if user_level else DEFAULT_COLOR)
             )
 
-            embed.add_field(name="Владелец", value=interaction.user.name, inline=False)
+            embed.add_field(name="Владелец", value=target_user.name, inline=False)
             embed.add_field(
                 name="Баланс",
                 value=f"{CURRENCY['SYMBOL']} {self.format_amount(balance)}",
@@ -165,6 +171,9 @@ class Economy(commands.Cog):
                             )
                     except SQLAlchemyError as e:
                         print(f"Database error in balance command (first level): {str(e)}", file=sys.stderr)
+
+            if user:
+                embed.set_footer(text=f"Запрошено пользователем: {interaction.user.name}")
 
             await interaction.response.send_message(embed=embed)
         except Exception as e:
