@@ -20,24 +20,35 @@ bot = commands.Bot(command_prefix=PREFIX, intents=intents)
 # Load cogs
 async def load_extensions():
     """Load all cog extensions"""
-    await bot.load_extension("cogs.economy")
-    await bot.load_extension("cogs.admin")
-    # Removed Minecraft cog loading
+    try:
+        print("Loading economy cog...")
+        await bot.load_extension("cogs.economy")
+        print("Loading admin cog...")
+        await bot.load_extension("cogs.admin")
+        print("All cogs loaded successfully")
+    except Exception as e:
+        print(f"Error loading cogs: {e}")
+        raise  # Re-raise to handle in on_ready
 
 @bot.event
 async def on_ready():
     """Called when bot is ready and connected"""
-    await load_extensions()
     print(f'{bot.user} has connected to Discord!')
     try:
-        await bot.tree.sync()  # Sync slash commands
+        await load_extensions()
+        print("Attempting to sync application commands...")
+        await bot.tree.sync()
         print("Successfully synced application commands")
-    except discord.errors.HTTPException as e:
-        print(f"Failed to sync commands: {e}")
+        print("Bot is fully ready!")
+    except Exception as e:
+        print(f"An error occurred during setup: {e}")
+        return  # Exit early if setup fails
 
 @bot.event
 async def on_command_error(ctx, error):
     """Global error handler for commands"""
+    print(f"Command error occurred: {type(error).__name__} - {str(error)}")
+
     if isinstance(error, commands.errors.CheckFailure):
         await ctx.send('❌ У вас нет прав для выполнения этой команды.')
     elif isinstance(error, commands.errors.CommandNotFound):
@@ -48,10 +59,10 @@ async def on_command_error(ctx, error):
         await ctx.send('❌ Пользователь не найден.')
     else:
         await ctx.send(f'❌ Произошла ошибка: {str(error)}')
-        print(f"Error occurred: {error}")
 
 if __name__ == "__main__":
     try:
+        print("Starting bot...")
         bot.run(TOKEN)
     except discord.errors.LoginFailure:
         print("Failed to login: Invalid token")

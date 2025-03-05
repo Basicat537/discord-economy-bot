@@ -7,8 +7,7 @@ DEFAULT_BALANCE = 1000  # Starting balance
 # Currency settings
 CURRENCY = {
     'NAME': 'монет',
-    'SYMBOL': '💰',
-    'FORMAT': '{amount:,} {currency}'  # Example: "1,000 монет"
+    'SYMBOL': '💰'
 }
 
 # Service levels configuration
@@ -68,19 +67,10 @@ PERMISSION_LEVELS = {
 
 # Command permissions configuration
 COMMAND_PERMISSIONS = {
-    # Basic commands
-    'help': {'level': 0, 'roles': []},
-    'balance': {'level': 0, 'roles': []},
-    'send': {'level': 0, 'roles': []},
-    'top': {'level': 0, 'roles': []},
-    'level': {'level': 0, 'roles': []},
-
     # Admin commands
     'admin_set': {'level': 3, 'roles': ['ADMIN']},
     'admin_reset': {'level': 3, 'roles': ['ADMIN']},
     'set_currency': {'level': 3, 'roles': ['ADMIN']},
-    'set_permission': {'level': 3, 'roles': ['ADMIN']},
-    'get_command_permissions': {'level': 3, 'roles': ['ADMIN']},
     'add_level': {'level': 3, 'roles': ['ADMIN']},
     'edit_level': {'level': 3, 'roles': ['ADMIN']},
     'remove_level': {'level': 3, 'roles': ['ADMIN']}
