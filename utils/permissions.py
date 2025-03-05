@@ -1,75 +1,63 @@
 import discord
 from discord import app_commands
-from .config import REQUIRED_ROLES, PERMISSION_LEVELS, ERRORS, COMMAND_PERMISSIONS
+from utils.database import get_db, ServiceLevel
+from utils.config import ERRORS
 
 def get_user_permission_level(member: discord.Member) -> int:
     """Calculate user's permission level based on their roles"""
-    user_roles = [role.name for role in member.roles]
-    user_level = PERMISSION_LEVELS['DEFAULT']  # Start with default level
+    # Default level for everyone
+    default_level = 0
 
-    # Only check actual roles, skip DEFAULT since it's just a base level
-    for role_name, level in PERMISSION_LEVELS.items():
-        if role_name != 'DEFAULT' and REQUIRED_ROLES.get(role_name, '') in user_roles:
-            user_level = max(user_level, level)
+    # Admin gets highest level
+    if member.guild_permissions.administrator:
+        return 3
 
-    return user_level
+    # Check other roles
+    if any(role.permissions.manage_guild for role in member.roles):
+        return 2
 
-def check_command_permission(command_name: str, member: discord.Member) -> bool:
-    """Check if user has permission to use a command"""
-    if command_name not in COMMAND_PERMISSIONS:
-        return False
+    if any(role.permissions.manage_messages for role in member.roles):
+        return 1
 
-    permission = COMMAND_PERMISSIONS[command_name]
-    user_level = get_user_permission_level(member)
-
-    # Check permission level
-    if user_level >= permission['level']:
-        return True
-
-    # Check specific roles
-    user_roles = [role.name for role in member.roles]
-    for role_name in permission['roles']:
-        if REQUIRED_ROLES.get(role_name, '') in user_roles:
-            return True
-
-    return False
+    return default_level
 
 def has_command_permission(command_name: str):
     """Decorator to check command permissions"""
     async def predicate(interaction: discord.Interaction):
-        if check_command_permission(command_name, interaction.user):
+        # Admin always has access
+        if interaction.user.guild_permissions.administrator:
             return True
 
-        await interaction.response.send_message(
-            ERRORS['NO_PERMISSION'],
-            ephemeral=True
-        )
-        return False
+        # Get user's permission level
+        user_level = get_user_permission_level(interaction.user)
 
-    return app_commands.check(predicate)
-
-def set_command_permission(command_name: str, level: int, roles: list[str]) -> bool:
-    """Set permission requirements for a command"""
-    if command_name not in COMMAND_PERMISSIONS:
-        return False
-
-    if level < 0 or level > max(PERMISSION_LEVELS.values()):
-        return False
-
-    # Validate roles
-    for role in roles:
-        if role not in REQUIRED_ROLES:
+        # Commands requiring admin (level 3)
+        admin_commands = ['admin_set', 'admin_reset', 'set_currency', 'add_level', 'edit_level', 'remove_level']
+        if command_name in admin_commands and user_level < 3:
+            await interaction.response.send_message(
+                ERRORS['NO_PERMISSION'],
+                ephemeral=True
+            )
             return False
 
-    COMMAND_PERMISSIONS[command_name] = {
-        'level': level,
-        'roles': roles
-    }
-    return True
+        # Commands requiring moderator (level 2)
+        mod_commands = ['mute', 'unmute', 'kick']
+        if command_name in mod_commands and user_level < 2:
+            await interaction.response.send_message(
+                ERRORS['NO_PERMISSION'],
+                ephemeral=True
+            )
+            return False
 
-def get_command_permission(command_name: str) -> dict:
-    """Get permission settings for a command"""
-    return COMMAND_PERMISSIONS.get(command_name, {
-        'level': 0,
-        'roles': []
-    })
+        # Commands requiring helper (level 1)
+        helper_commands = ['warn', 'unwarn']
+        if command_name in helper_commands and user_level < 1:
+            await interaction.response.send_message(
+                ERRORS['NO_PERMISSION'],
+                ephemeral=True
+            )
+            return False
+
+        return True
+
+    return app_commands.check(predicate)

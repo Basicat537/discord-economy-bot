@@ -1,8 +1,10 @@
 import discord
 from discord.ext import commands
 from discord import app_commands
-from utils.config import DEFAULT_BALANCE, ERRORS, CURRENCY, SERVICE_LEVELS, PERMISSION_LEVELS, REQUIRED_ROLES
-from utils.permissions import has_command_permission, set_command_permission, get_command_permission, get_user_permission_level
+from utils.config import DEFAULT_BALANCE, ERRORS, CURRENCY
+from utils.permissions import has_command_permission
+from utils.database import get_db, UserProfile, ServiceLevel, Transaction # Added import for database interaction and models
+import json
 
 class Admin(commands.Cog):
     """Admin commands implementation"""
@@ -35,7 +37,6 @@ class Admin(commands.Cog):
         """Add new service level"""
         print(f"Add level command called by {interaction.user.name}")
 
-        # Convert color from hex to int
         try:
             color_int = int(color.replace('#', ''), 16)
         except ValueError:
@@ -45,41 +46,54 @@ class Admin(commands.Cog):
             )
             return
 
-        # Generate new ID
-        new_id = max([level['id'] for level in SERVICE_LEVELS['levels']], default=0) + 1
+        benefits_list = [b.strip() for b in benefits.split(',')]
 
-        # Create new level
-        new_level = {
-            'id': new_id,
-            'name': name,
-            'emoji': emoji,
-            'required_balance': required_balance,
-            'color': color_int,
-            'benefits': [b.strip() for b in benefits.split(',')]
-        }
+        db = next(get_db())
+        try:
+            # Проверяем, существует ли уже уровень с таким required_balance для этого сервера
+            existing_level = db.query(ServiceLevel).filter(
+                ServiceLevel.guild_id == interaction.guild_id,
+                ServiceLevel.required_balance == required_balance
+            ).first()
 
-        # Add to levels list
-        SERVICE_LEVELS['levels'].append(new_level)
-        SERVICE_LEVELS['levels'].sort(key=lambda x: x['required_balance'])
+            if existing_level:
+                await interaction.response.send_message(
+                    f'❌ Уровень с требуемым балансом {required_balance} уже существует!',
+                    ephemeral=True
+                )
+                return
 
-        embed = discord.Embed(
-            title="✅ Уровень добавлен",
-            color=discord.Color(color_int)
-        )
-        embed.add_field(name="ID", value=str(new_id), inline=True)
-        embed.add_field(name="Название", value=f"{emoji} {name}", inline=True)
-        embed.add_field(
-            name="Требуемый баланс",
-            value=f"{required_balance:,} {CURRENCY['NAME']}",
-            inline=True
-        )
-        embed.add_field(
-            name="Привилегии",
-            value="\n".join(f"• {b}" for b in new_level['benefits']),
-            inline=False
-        )
+            new_level = ServiceLevel(
+                guild_id=interaction.guild_id,
+                name=name,
+                emoji=emoji,
+                required_balance=required_balance,
+                color=color_int,
+                benefits=json.dumps(benefits_list)
+            )
+            db.add(new_level)
+            db.commit()
 
-        await interaction.response.send_message(embed=embed)
+            embed = discord.Embed(
+                title="✅ Уровень добавлен",
+                color=discord.Color(color_int)
+            )
+            embed.add_field(name="ID", value=str(new_level.id), inline=True)
+            embed.add_field(name="Название", value=f"{emoji} {name}", inline=True)
+            embed.add_field(
+                name="Требуемый баланс",
+                value=f"{required_balance:,} {CURRENCY['NAME']}",
+                inline=True
+            )
+            embed.add_field(
+                name="Привилегии",
+                value="\n".join(f"• {b}" for b in benefits_list),
+                inline=False
+            )
+
+            await interaction.response.send_message(embed=embed)
+        finally:
+            db.close()
 
     @app_commands.command(
         name='edit_level',
@@ -107,54 +121,80 @@ class Admin(commands.Cog):
         """Edit existing service level"""
         print(f"Edit level command called by {interaction.user.name} for level {level_id}")
 
-        level = next((l for l in SERVICE_LEVELS['levels'] if l['id'] == level_id), None)
-        if not level:
-            await interaction.response.send_message(
-                ERRORS['LEVEL_NOT_FOUND'],
-                ephemeral=True
-            )
-            return
+        db = next(get_db())
+        try:
+            level = db.query(ServiceLevel).filter_by(
+                id=level_id,
+                guild_id=interaction.guild_id
+            ).first()
 
-        # Update fields if provided
-        if name:
-            level['name'] = name
-        if emoji:
-            level['emoji'] = emoji
-        if required_balance > 0:
-            level['required_balance'] = required_balance
-        if color:
-            try:
-                level['color'] = int(color.replace('#', ''), 16)
-            except ValueError:
+            if not level:
                 await interaction.response.send_message(
-                    '❌ Неверный формат цвета! Используйте hex код (например: FF0000)',
+                    ERRORS['LEVEL_NOT_FOUND'],
                     ephemeral=True
                 )
                 return
-        if benefits:
-            level['benefits'] = [b.strip() for b in benefits.split(',')]
 
-        # Resort levels by required balance
-        SERVICE_LEVELS['levels'].sort(key=lambda x: x['required_balance'])
+            if name:
+                level.name = name
+            if emoji:
+                level.emoji = emoji
+            if required_balance > 0:
+                # Проверяем, не конфликтует ли новый required_balance с другими уровнями
+                existing_level = db.query(ServiceLevel).filter(
+                    ServiceLevel.guild_id == interaction.guild_id,
+                    ServiceLevel.required_balance == required_balance,
+                    ServiceLevel.id != level_id
+                ).first()
 
-        embed = discord.Embed(
-            title="✅ Уровень обновлен",
-            color=discord.Color(level['color'])
-        )
-        embed.add_field(name="ID", value=str(level['id']), inline=True)
-        embed.add_field(name="Название", value=f"{level['emoji']} {level['name']}", inline=True)
-        embed.add_field(
-            name="Требуемый баланс",
-            value=f"{level['required_balance']:,} {CURRENCY['NAME']}",
-            inline=True
-        )
-        embed.add_field(
-            name="Привилегии",
-            value="\n".join(f"• {b}" for b in level['benefits']),
-            inline=False
-        )
+                if existing_level:
+                    await interaction.response.send_message(
+                        f'❌ Уровень с требуемым балансом {required_balance} уже существует!',
+                        ephemeral=True
+                    )
+                    return
 
-        await interaction.response.send_message(embed=embed)
+                level.required_balance = required_balance
+
+            if color:
+                try:
+                    level.color = int(color.replace('#', ''), 16)
+                except ValueError:
+                    await interaction.response.send_message(
+                        '❌ Неверный формат цвета! Используйте hex код (например: FF0000)',
+                        ephemeral=True
+                    )
+                    return
+
+            if benefits:
+                level.benefits = json.dumps([b.strip() for b in benefits.split(',')])
+
+            db.commit()
+
+            embed = discord.Embed(
+                title="✅ Уровень обновлен",
+                color=discord.Color(level.color)
+            )
+            embed.add_field(name="ID", value=str(level.id), inline=True)
+            embed.add_field(
+                name="Название",
+                value=f"{level.emoji} {level.name}",
+                inline=True
+            )
+            embed.add_field(
+                name="Требуемый баланс",
+                value=f"{level.required_balance:,} {CURRENCY['NAME']}",
+                inline=True
+            )
+            embed.add_field(
+                name="Привилегии",
+                value="\n".join(f"• {b}" for b in json.loads(level.benefits)),
+                inline=False
+            )
+
+            await interaction.response.send_message(embed=embed)
+        finally:
+            db.close()
 
     @app_commands.command(
         name='remove_level',
@@ -170,18 +210,28 @@ class Admin(commands.Cog):
         """Remove service level"""
         print(f"Remove level command called by {interaction.user.name} for level {level_id}")
 
-        level = next((l for l in SERVICE_LEVELS['levels'] if l['id'] == level_id), None)
-        if not level:
-            await interaction.response.send_message(
-                ERRORS['LEVEL_NOT_FOUND'],
-                ephemeral=True
-            )
-            return
+        db = next(get_db())
+        try:
+            level = db.query(ServiceLevel).filter_by(
+                id=level_id,
+                guild_id=interaction.guild_id
+            ).first()
 
-        SERVICE_LEVELS['levels'].remove(level)
-        await interaction.response.send_message(
-            f"✅ Уровень {level['emoji']} {level['name']} успешно удален"
-        )
+            if not level:
+                await interaction.response.send_message(
+                    ERRORS['LEVEL_NOT_FOUND'],
+                    ephemeral=True
+                )
+                return
+
+            db.delete(level)
+            db.commit()
+
+            await interaction.response.send_message(
+                f"✅ Уровень {level.emoji} {level.name} успешно удален"
+            )
+        finally:
+            db.close()
 
     @app_commands.command(
         name='admin_set',
@@ -206,38 +256,52 @@ class Admin(commands.Cog):
             )
             return
 
-        economy_cog = self.bot.get_cog('Economy')
-        if not economy_cog:
-            await interaction.response.send_message(
-                ERRORS['ECONOMY_MODULE_ERROR'],
-                ephemeral=True
+        db = next(get_db())
+        try:
+            profile = db.query(UserProfile).filter(
+                UserProfile.user_id == user.id,
+                UserProfile.guild_id == interaction.guild_id
+            ).first()
+
+            if not profile:
+                profile = UserProfile(
+                    user_id=user.id,
+                    guild_id=interaction.guild_id,
+                    balance=amount
+                )
+                db.add(profile)
+            else:
+                old_balance = profile.balance
+                profile.balance = amount
+
+            # Record transaction
+            transaction = Transaction(
+                from_user_id=interaction.user.id,
+                to_user_id=user.id,
+                guild_id=interaction.guild_id,
+                amount=amount - (old_balance if 'old_balance' in locals() else 0),
+                transaction_type='admin_set'
             )
-            return
+            db.add(transaction)
+            db.commit()
 
-        old_balance = economy_cog.get_balance(user.id)
-        economy_cog.accounts[user.id] = amount
+            embed = discord.Embed(title="Изменение баланса", color=discord.Color.blue())
+            embed.add_field(name="Пользователь", value=user.name, inline=True)
+            embed.add_field(
+                name="Старый баланс",
+                value=f"{CURRENCY['SYMBOL']} {old_balance if 'old_balance' in locals() else 0:,} {CURRENCY['NAME']}",
+                inline=True
+            )
+            embed.add_field(
+                name="Новый баланс",
+                value=f"{CURRENCY['SYMBOL']} {amount:,} {CURRENCY['NAME']}",
+                inline=True
+            )
+            embed.set_footer(text=f"Изменено администратором: {interaction.user.name}")
 
-        embed = discord.Embed(title="Изменение баланса", color=discord.Color.blue())
-        embed.add_field(name="Пользователь", value=user.name, inline=True)
-        embed.add_field(
-            name="Старый баланс",
-            value=CURRENCY['FORMAT'].format(
-                amount=old_balance,
-                currency=CURRENCY['NAME']
-            ),
-            inline=True
-        )
-        embed.add_field(
-            name="Новый баланс",
-            value=CURRENCY['FORMAT'].format(
-                amount=amount,
-                currency=CURRENCY['NAME']
-            ),
-            inline=True
-        )
-        embed.set_footer(text=f"Изменено администратором: {interaction.user.name}")
-
-        await interaction.response.send_message(embed=embed)
+            await interaction.response.send_message(embed=embed)
+        finally:
+            db.close()
 
     @app_commands.command(
         name='set_currency',

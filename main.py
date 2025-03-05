@@ -3,6 +3,8 @@ import discord
 from discord.ext import commands
 from dotenv import load_dotenv
 from utils.config import PREFIX
+from utils.database import Base, engine  # Import database components
+from sqlalchemy import inspect
 
 # Load environment variables
 load_dotenv()
@@ -10,6 +12,14 @@ TOKEN = os.getenv('DISCORD_TOKEN')
 
 if not TOKEN:
     raise ValueError("DISCORD_TOKEN environment variable is not set!")
+
+# Initialize database tables
+print("Creating database tables...")
+Base.metadata.create_all(bind=engine)
+inspector = inspect(engine)
+table_names = inspector.get_table_names()
+print("Created tables:", table_names)
+print("Database tables created successfully")
 
 # Initialize bot with required intents
 intents = discord.Intents.default()

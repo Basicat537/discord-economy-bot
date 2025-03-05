@@ -4,7 +4,10 @@ version = "0.1.0"
 description = "Add your description here"
 requires-python = ">=3.11"
 dependencies = [
+    "alembic>=1.15.1",
     "discord-py>=2.5.1",
     "mcstatus>=11.1.1",
+    "psycopg2-binary>=2.9.10",
     "python-dotenv>=1.0.1",
+    "sqlalchemy>=2.0.38",
 ]

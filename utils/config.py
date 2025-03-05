@@ -10,71 +10,8 @@ CURRENCY = {
     'SYMBOL': '💰'
 }
 
-# Service levels configuration
-SERVICE_LEVELS = {
-    'levels': [
-        {
-            'id': 1,
-            'name': 'Бронзовый',
-            'emoji': '🥉',
-            'required_balance': 10000,
-            'color': 0xCD7F32,
-            'benefits': [
-                'Ежедневный бонус: 100 монет',
-                'Множитель наград: 1.1x'
-            ]
-        },
-        {
-            'id': 2,
-            'name': 'Серебряный',
-            'emoji': '🥈',
-            'required_balance': 50000,
-            'color': 0xC0C0C0,
-            'benefits': [
-                'Ежедневный бонус: 300 монет',
-                'Множитель наград: 1.25x'
-            ]
-        },
-        {
-            'id': 3,
-            'name': 'Золотой',
-            'emoji': '🥇',
-            'required_balance': 100000,
-            'color': 0xFFD700,
-            'benefits': [
-                'Ежедневный бонус: 500 монет',
-                'Множитель наград: 1.5x'
-            ]
-        }
-    ],
-    'default_color': 0x7289DA
-}
-
-# Role settings
-REQUIRED_ROLES = {
-    'ADMIN': 'Admin',
-    'MODERATOR': 'Moderator',
-    'VIP': 'VIP'
-}
-
-# Permission levels (higher number = more permissions)
-PERMISSION_LEVELS = {
-    'DEFAULT': 0,
-    'VIP': 1,
-    'MODERATOR': 2,
-    'ADMIN': 3
-}
-
-# Command permissions configuration
-COMMAND_PERMISSIONS = {
-    # Admin commands
-    'admin_set': {'level': 3, 'roles': ['ADMIN']},
-    'admin_reset': {'level': 3, 'roles': ['ADMIN']},
-    'set_currency': {'level': 3, 'roles': ['ADMIN']},
-    'add_level': {'level': 3, 'roles': ['ADMIN']},
-    'edit_level': {'level': 3, 'roles': ['ADMIN']},
-    'remove_level': {'level': 3, 'roles': ['ADMIN']}
-}
+# Default color for embeds when no service level color is available
+DEFAULT_COLOR = 0x7289DA
 
 # Error messages
 ERRORS = {
@@ -87,4 +24,9 @@ ERRORS = {
     'COMMAND_NOT_FOUND': '❌ Команда не найдена!',
     'LEVEL_NOT_FOUND': '❌ Указанный уровень не найден!',
     'INVALID_LEVEL_ID': '❌ Неверный ID уровня!'
+}
+
+# Service levels configuration
+SERVICE_LEVELS = {
+    'default_color': DEFAULT_COLOR
 }
