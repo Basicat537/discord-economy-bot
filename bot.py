@@ -8,31 +8,59 @@ import json
 import hmac
 import hashlib
 from datetime import datetime
+import sys
+import asyncio
 
 # Создаем директории, если они не существуют
 os.makedirs('logs', exist_ok=True)
 os.makedirs('data', exist_ok=True)
 
 # Загрузка конфигурации
-with open('config.yml', 'r', encoding='utf-8') as f:
-    config = yaml.safe_load(f)
+try:
+    with open('config.yml', 'r', encoding='utf-8') as f:
+        config = yaml.safe_load(f)
+    logger = logging.getLogger('EconomyBot')
+    logger.setLevel(logging.DEBUG)
 
-# Настройка логирования
-logging.basicConfig(
-    level=getattr(logging, config['logging']['level']),
-    format=config['logging']['format'],
-    handlers=[
-        logging.FileHandler('logs/bot.log'),
-        logging.StreamHandler()  # Добавляем вывод в консоль
-    ]
-)
-logger = logging.getLogger('EconomyBot')
+    # Файловый handler
+    file_handler = logging.FileHandler('logs/bot.log')
+    file_handler.setLevel(logging.INFO)
+
+    # Консольный handler
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(logging.DEBUG)
+
+    # Форматирование
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    file_handler.setFormatter(formatter)
+    console_handler.setFormatter(formatter)
+
+    logger.addHandler(file_handler)
+    logger.addHandler(console_handler)
+
+except Exception as e:
+    print(f"Ошибка при инициализации логирования: {e}", file=sys.stderr)
+    sys.exit(1)
+
+# Проверка переменных окружения
+if not os.getenv('DISCORD_TOKEN'):
+    logger.error("DISCORD_TOKEN не установлен!")
+    sys.exit(1)
+
+if not os.getenv('API_KEY'):
+    logger.error("API_KEY не установлен!")
+    sys.exit(1)
 
 # Инициализация бота
-intents = discord.Intents.default()
-intents.message_content = True
-intents.members = True  # Для работы с участниками
-bot = commands.Bot(command_prefix=config['bot']['prefix'], intents=intents)
+try:
+    intents = discord.Intents.default()
+    intents.message_content = True
+    intents.members = True
+    bot = commands.Bot(command_prefix=config['bot']['prefix'], intents=intents)
+    logger.info("Бот успешно инициализирован")
+except Exception as e:
+    logger.error(f"Ошибка при инициализации бота: {e}")
+    sys.exit(1)
 
 # Класс для работы с экономикой
 class EconomyManager:
@@ -99,18 +127,31 @@ economy = EconomyManager(config['database']['path'])
 # API сервер
 class APIServer:
     def __init__(self, bot, economy):
-        self.app = web.Application()
+        self.app = web.Application(middlewares=[self.error_middleware])
         self.bot = bot
         self.economy = economy
         self.api_key = os.getenv('API_KEY')
         if not self.api_key:
             raise ValueError("API_KEY не установлен")
         self.setup_routes()
+        logger.info("API Server initialized")
+
+    @web.middleware
+    async def error_middleware(self, request, handler):
+        try:
+            logger.info(f"Incoming request: {request.method} {request.path}")
+            response = await handler(request)
+            logger.info(f"Response status: {response.status}")
+            return response
+        except Exception as ex:
+            logger.error(f"Error handling request: {ex}")
+            return web.Response(status=500, text=str(ex))
 
     def setup_routes(self):
         self.app.router.add_get('/balance/{user_id}', self.get_balance)
         self.app.router.add_post('/transfer', self.transfer_money)
         self.app.router.add_get('/test', self.test_connection)
+        logger.info("API routes configured")
 
     def verify_signature(self, data, signature):
         expected = hmac.new(
@@ -121,9 +162,26 @@ class APIServer:
         return hmac.compare_digest(expected, signature)
 
     async def test_connection(self, request):
+        """Test endpoint with debug mode for easier testing"""
+        debug_mode = bool(os.getenv('DEBUG', 'False').lower() == 'true')
         signature = request.headers.get('X-Signature')
+
+        logger.debug(f"Test connection request received. Debug mode: {debug_mode}")
+
+        # В режиме отладки пропускаем проверку подписи
+        if debug_mode:
+            logger.debug("Test endpoint called in debug mode")
+            return web.json_response({
+                'status': 'ok',
+                'message': 'API is working!',
+                'debug': True
+            })
+
         if not signature or not self.verify_signature('test', signature):
+            logger.warning("Invalid signature in test endpoint")
             return web.Response(status=403, text='Invalid signature')
+
+        logger.info("Test endpoint called successfully")
         return web.json_response({'status': 'ok', 'message': 'API is working!'})
 
     async def get_balance(self, request):
@@ -131,9 +189,11 @@ class APIServer:
         signature = request.headers.get('X-Signature')
 
         if not signature or not self.verify_signature(user_id, signature):
+            logger.warning(f"Invalid signature for balance request. User ID: {user_id}")
             return web.Response(status=403, text='Invalid signature')
 
         balance = self.economy.get_balance(user_id)
+        logger.info(f"Balance requested for user {user_id}: {balance}")
         return web.json_response({'balance': balance})
 
     async def transfer_money(self, request):
@@ -143,6 +203,7 @@ class APIServer:
 
             signature_data = f"{data['from_id']}{data['to_id']}{data['amount']}"
             if not signature or not self.verify_signature(signature_data, signature):
+                logger.warning("Invalid signature for transfer request")
                 return web.Response(status=403, text='Invalid signature')
 
             from_id = data['from_id']
@@ -154,16 +215,20 @@ class APIServer:
 
             try:
                 self.economy.transfer(from_id, to_id, amount)
-                return web.json_response({
+                result = {
                     'status': 'success',
                     'message': 'Transfer completed',
                     'from_balance': self.economy.get_balance(from_id),
                     'to_balance': self.economy.get_balance(to_id)
-                })
+                }
+                logger.info(f"Transfer successful: {from_id} -> {to_id}: {amount}")
+                return web.json_response(result)
             except ValueError as e:
+                logger.error(f"Transfer failed: {str(e)}")
                 return web.Response(status=400, text=str(e))
 
         except Exception as e:
+            logger.error(f"Error in transfer: {str(e)}")
             return web.Response(status=400, text=str(e))
 
 # Команды бота
@@ -273,24 +338,59 @@ async def minecraft_status(ctx):
 
 # Запуск бота и API сервера
 async def start_api():
-    api_server = APIServer(bot, economy)
-    runner = web.AppRunner(api_server.app)
-    await runner.setup()
-    site = web.TCPSite(
-        runner,
-        config['api']['host'],
-        config['api']['port']
-    )
-    await site.start()
-    logger.info(f"API server started on {config['api']['host']}:{config['api']['port']}")
+    """Start API server"""
+    try:
+        logger.info("Starting API server...")
+        api_server = APIServer(bot, economy)
+        runner = web.AppRunner(api_server.app)
+        await runner.setup()
+        site = web.TCPSite(
+            runner,
+            config['api']['host'],
+            config['api']['port']
+        )
+        await site.start()
+        logger.info(f"API server started on {config['api']['host']}:{config['api']['port']}")
+    except Exception as e:
+        logger.error(f"Failed to start API server: {e}")
+        raise
 
 @bot.event
 async def on_ready():
-    logger.info(f'Logged in as {bot.user}')
-    await start_api()
-    await bot.change_presence(activity=discord.Game(config['bot']['status']))
+    """Called when bot is ready and connected"""
+    try:
+        logger.info(f'{bot.user} has connected to Discord!')
+        await bot.tree.sync()
+        await start_api()
+        await bot.change_presence(activity=discord.Game(config['bot']['status']))
+        logger.info("Bot is fully ready!")
+    except Exception as e:
+        logger.error(f"Error during bot setup: {e}")
+        raise
 
-# Запуск бота
+@bot.event
+async def on_command_error(ctx, error):
+    """Глобальный обработчик ошибок команд"""
+    logger.error(f"Ошибка команды: {type(error).__name__} - {str(error)}")
+
+    if isinstance(error, commands.errors.CheckFailure):
+        await ctx.send('❌ У вас нет прав для выполнения этой команды.')
+    elif isinstance(error, commands.errors.CommandNotFound):
+        await ctx.send('❌ Команда не найдена.')
+    elif isinstance(error, commands.errors.MissingPermissions):
+        await ctx.send('❌ У вас недостаточно прав для выполнения этой команды.')
+    elif isinstance(error, commands.errors.UserNotFound):
+        await ctx.send('❌ Пользователь не найден.')
+    else:
+        await ctx.send(f'❌ Произошла ошибка: {str(error)}')
+
+
 if __name__ == "__main__":
-    logger.info("Starting bot...")
-    bot.run(os.getenv('DISCORD_TOKEN'))
+    try:
+        logger.info("Starting bot...")
+        bot.run(os.getenv('DISCORD_TOKEN'))
+    except discord.errors.LoginFailure:
+        logger.error("Failed to login: Invalid token")
+    except Exception as e:
+        logger.error(f"An error occurred: {e}")
+        sys.exit(1)
