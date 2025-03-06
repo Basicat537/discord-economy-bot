@@ -1,6 +1,6 @@
 import json
 import os
-from datetime import datetime, timedelta
+from datetime import datetime
 
 class JsonStorage:
     def __init__(self, filename):
@@ -16,7 +16,6 @@ class JsonStorage:
             with open(self.filename, 'w') as f:
                 json.dump({
                     'balances': {},
-                    'daily_claims': {},
                     'linked_accounts': {}
                 }, f)
 
@@ -57,24 +56,6 @@ class JsonStorage:
         self.remove_coins(sender_id, amount)
         self.add_coins(recipient_id, amount)
 
-    def add_daily_reward(self, user_id):
-        """Add daily reward to user"""
-        data = self._load_data()
-        now = datetime.now().isoformat()
-        last_claim = data.get('daily_claims', {}).get(user_id)
-        
-        if last_claim and datetime.fromisoformat(last_claim) + timedelta(days=1) > datetime.now():
-            raise ValueError("You already claimed your daily reward today!")
-
-        reward_amount = 100
-        self.add_coins(user_id, reward_amount)
-        
-        if 'daily_claims' not in data:
-            data['daily_claims'] = {}
-        data['daily_claims'][user_id] = now
-        self._save_data(data)
-        return reward_amount
-
     def set_minecraft_link(self, user_id, minecraft_username):
         """Link Discord user to Minecraft username"""
         data = self._load_data()
@@ -94,12 +75,3 @@ class JsonStorage:
         """Get linked Minecraft username for user"""
         data = self._load_data()
         return data.get('linked_accounts', {}).get(user_id)
-
-    def give_minecraft_reward(self, user_id):
-        """Give reward for linked Minecraft account"""
-        if not self.get_minecraft_username(user_id):
-            raise ValueError("You need to link your Minecraft account first!")
-        
-        reward_amount = 50
-        self.add_coins(user_id, reward_amount)
-        return reward_amount

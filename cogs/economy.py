@@ -18,7 +18,7 @@ class Economy(commands.Cog):
         """Check your current balance"""
         user_id = str(ctx.author.id)
         balance = self.storage.get_user_balance(user_id)
-        
+
         embed = discord.Embed(
             title="Balance",
             description=f"Your current balance: {balance} coins",
@@ -45,21 +45,6 @@ class Economy(commands.Cog):
             )
             await ctx.send(embed=embed)
             self.logger.log(f"Transfer: {sender_id} -> {recipient_id}: {amount} coins")
-        except ValueError as e:
-            await ctx.send(str(e))
-
-    @commands.command(name='daily')
-    async def daily(self, ctx):
-        """Claim daily reward"""
-        user_id = str(ctx.author.id)
-        try:
-            amount = self.storage.add_daily_reward(user_id)
-            embed = discord.Embed(
-                title="Daily Reward",
-                description=f"You received {amount} coins!",
-                color=discord.Color.green()
-            )
-            await ctx.send(embed=embed)
         except ValueError as e:
             await ctx.send(str(e))
 

@@ -12,9 +12,6 @@ commands:
   pay:
     description: Перевести деньги другому игроку
     usage: /pay <игрок> <сумма>
-  reward:
-    description: Получить награду за игровое время
-    usage: /reward
   checkapi:
     description: Проверить работу API (только для администраторов)
     usage: /checkapi
@@ -25,3 +22,6 @@ permissions:
   economybridge.admin:
     description: Доступ к административным командам плагина
     default: op
+  economybridge.use:
+    description: Доступ к основным командам плагина
+    default: true

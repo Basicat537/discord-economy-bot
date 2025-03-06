@@ -3,7 +3,7 @@ version: '${project.version}'
 main: com.discordbot.economybridge.EconomyBridge
 api-version: '1.20'
 depend: [PlaceholderAPI, floodgate, Vault]
-softdepend: [Geyser-Spigot, DiscordSRV, LuckPerms, CoreProtect, WorldGuard, ClansLite]
+softdepend: [Geyser-Spigot, DiscordSRV, LuckPerms]
 commands:
   balance:
     description: Показать ваш баланс
@@ -12,9 +12,6 @@ commands:
   pay:
     description: Перевести деньги другому игроку
     usage: /pay <игрок> <сумма>
-  reward:
-    description: Получить награду за игровое время
-    usage: /reward
   checkapi:
     description: Проверить работу API (только для администраторов)
     usage: /checkapi

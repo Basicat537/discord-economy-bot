@@ -20,13 +20,6 @@ import github.scarsz.discordsrv.api.Subscribe;
 import github.scarsz.discordsrv.api.events.DiscordGuildMessageReceivedEvent;
 import net.luckperms.api.LuckPerms;
 import net.luckperms.api.LuckPermsProvider;
-import net.coreprotect.CoreProtect;
-import net.coreprotect.CoreProtectAPI;
-import com.sk89q.worldguard.WorldGuard;
-import com.sk89q.worldguard.protection.regions.RegionContainer;
-import com.sk89q.worldguard.protection.flags.registry.FlagRegistry;
-import com.sk89q.worldguard.protection.flags.Flag;
-import com.sk89q.worldguard.protection.flags.StateFlag;
 
 public class EconomyBridge extends JavaPlugin {
     private static String API_URL;
@@ -35,8 +28,6 @@ public class EconomyBridge extends JavaPlugin {
     private FloodgateApi floodgateApi;
     private LuckPerms luckPerms;
     private DiscordSRV discordSRV;
-    private CoreProtectAPI coreProtect;
-    private StateFlag ALLOW_ECONOMY;
 
     @Override
     public void onEnable() {
@@ -71,33 +62,6 @@ public class EconomyBridge extends JavaPlugin {
             getLogger().info("DiscordSRV API успешно инициализирован");
         }
 
-        // Инициализация CoreProtect
-        if (getServer().getPluginManager().getPlugin("CoreProtect") != null) {
-            CoreProtect coreProtect = (CoreProtect) getServer().getPluginManager().getPlugin("CoreProtect");
-            if (coreProtect != null) {
-                this.coreProtect = coreProtect.getAPI();
-                if (this.coreProtect.isEnabled()) {
-                    getLogger().info("CoreProtect API успешно инициализирован");
-                }
-            }
-        }
-
-        // Инициализация WorldGuard
-        if (getServer().getPluginManager().getPlugin("WorldGuard") != null) {
-            FlagRegistry registry = WorldGuard.getInstance().getFlagRegistry();
-            try {
-                StateFlag flag = new StateFlag("allow-economy", true);
-                registry.register(flag);
-                ALLOW_ECONOMY = flag;
-                getLogger().info("WorldGuard флаг 'allow-economy' успешно зарегистрирован");
-            } catch (Exception e) {
-                Flag<?> existing = registry.get("allow-economy");
-                if (existing instanceof StateFlag) {
-                    ALLOW_ECONOMY = (StateFlag) existing;
-                }
-            }
-        }
-
         // Регистрация команд
         getCommand("balance").setExecutor((sender, cmd, label, args) -> {
             if (!(sender instanceof Player)) {
@@ -112,53 +76,18 @@ public class EconomyBridge extends JavaPlugin {
                 return true;
             }
 
-            // Проверка WorldGuard региона
-            if (!canUseEconomyInRegion(player)) {
-                player.sendMessage("§cВы не можете использовать экономику в этом регионе!");
-                return true;
-            }
-
             try {
                 int balance = getBalance(player.getUniqueId().toString());
                 String message = getConfig().getString("messages.balance", "&aВаш баланс: &f%balance% монет")
                     .replace("%balance%", String.valueOf(balance))
                     .replace('&', '§');
                 player.sendMessage(message);
-
-                // Логирование в CoreProtect
-                if (coreProtect != null) {
-                    coreProtect.logCommand(player.getName(), "/balance");
-                }
             } catch (Exception e) {
                 player.sendMessage("§cОшибка при получении баланса: " + e.getMessage());
             }
             return true;
         });
 
-        // Добавляем команду для проверки API
-        getCommand("checkapi").setExecutor((sender, cmd, label, args) -> {
-            if (!sender.hasPermission("economybridge.admin")) {
-                sender.sendMessage("§cУ вас нет прав для выполнения этой команды!");
-                return true;
-            }
-            try {
-                HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(API_URL + "/balance/test"))
-                    .header("X-Signature", generateSignature("test"))
-                    .GET()
-                    .build();
-
-                HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-                if (response.statusCode() == 200) {
-                    sender.sendMessage("§aAPI работает корректно! Код ответа: 200");
-                } else {
-                    sender.sendMessage("§cAPI вернул ошибку! Код: " + response.statusCode());
-                }
-            } catch (Exception e) {
-                sender.sendMessage("§cОшибка при проверке API: " + e.getMessage());
-            }
-            return true;
-        });
 
         // Регистрация PlaceholderAPI расширения
         new PlaceholderExpansion() {
@@ -187,11 +116,6 @@ public class EconomyBridge extends JavaPlugin {
                     return "N/A";
                 }
 
-                // Проверка WorldGuard региона
-                if (player.isOnline() && !canUseEconomyInRegion(player.getPlayer())) {
-                    return "N/A";
-                }
-
                 if (identifier.equals("balance")) {
                     try {
                         return String.valueOf(getBalance(player.getUniqueId().toString()));
@@ -212,18 +136,6 @@ public class EconomyBridge extends JavaPlugin {
             return floodgateApi.isFloodgatePlayer(player.getUniqueId());
         }
         return false;
-    }
-
-    private boolean canUseEconomyInRegion(Player player) {
-        if (ALLOW_ECONOMY == null) return true;
-        RegionContainer container = WorldGuard.getInstance().getPlatform().getRegionContainer();
-        return container.createQuery().testState(
-            com.sk89q.worldedit.bukkit.BukkitAdapter.adapt(player.getLocation()),
-            WorldGuard.getInstance().getPlatform().getSessionManager().get(
-                com.sk89q.worldedit.bukkit.BukkitAdapter.adapt(player)
-            ),
-            ALLOW_ECONOMY
-        );
     }
 
     private int getBalance(String userId) throws Exception {

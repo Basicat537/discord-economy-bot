@@ -17,8 +17,6 @@ messages:
   balance: '&aВаш баланс: &f%economy_balance% монет'
   pay_success: '&aВы перевели &f%amount% монет&a игроку &f%player%'
   pay_error: '&cОшибка при переводе: %error%'
-  reward_success: '&aВы получили &f%amount% монет&a в качестве награды!'
-  reward_error: '&cОшибка при получении награды: %error%'
 
 # Настройки для Bedrock игроков
 bedrock:
