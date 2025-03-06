@@ -16,7 +16,8 @@ class JsonStorage:
             with open(self.filename, 'w') as f:
                 json.dump({
                     'balances': {},
-                    'linked_accounts': {}
+                    'linked_accounts': {},
+                    'last_link_attempt': {}
                 }, f)
 
     def _load_data(self):
@@ -32,23 +33,23 @@ class JsonStorage:
     def get_user_balance(self, user_id):
         """Get user's balance"""
         data = self._load_data()
-        return data.get('balances', {}).get(user_id, 0)
+        return data.get('balances', {}).get(str(user_id), 0)
 
     def add_coins(self, user_id, amount):
         """Add coins to user's balance"""
         data = self._load_data()
         if 'balances' not in data:
             data['balances'] = {}
-        data['balances'][user_id] = data['balances'].get(user_id, 0) + amount
+        data['balances'][str(user_id)] = data['balances'].get(str(user_id), 0) + amount
         self._save_data(data)
 
     def remove_coins(self, user_id, amount):
         """Remove coins from user's balance"""
         data = self._load_data()
-        current_balance = data.get('balances', {}).get(user_id, 0)
+        current_balance = data.get('balances', {}).get(str(user_id), 0)
         if current_balance < amount:
-            raise ValueError("Insufficient funds")
-        data['balances'][user_id] = current_balance - amount
+            raise ValueError("Недостаточно средств")
+        data['balances'][str(user_id)] = current_balance - amount
         self._save_data(data)
 
     def transfer_coins(self, sender_id, recipient_id, amount):
@@ -56,22 +57,36 @@ class JsonStorage:
         self.remove_coins(sender_id, amount)
         self.add_coins(recipient_id, amount)
 
-    def set_minecraft_link(self, user_id, minecraft_username):
-        """Link Discord user to Minecraft username"""
+    def link_minecraft_account(self, discord_id, minecraft_username):
+        """Link Discord ID to Minecraft username"""
         data = self._load_data()
         if 'linked_accounts' not in data:
             data['linked_accounts'] = {}
-        data['linked_accounts'][user_id] = minecraft_username
+
+        # Проверяем, не привязан ли уже этот Minecraft аккаунт
+        for existing_id, existing_name in data['linked_accounts'].items():
+            if existing_name == minecraft_username:
+                raise ValueError("Этот Minecraft аккаунт уже привязан к другому Discord пользователю")
+
+        data['linked_accounts'][str(discord_id)] = minecraft_username
         self._save_data(data)
 
-    def remove_minecraft_link(self, user_id):
-        """Remove Minecraft link for user"""
+    def unlink_minecraft_account(self, discord_id):
+        """Unlink Minecraft account from Discord ID"""
         data = self._load_data()
-        if 'linked_accounts' in data and user_id in data['linked_accounts']:
-            del data['linked_accounts'][user_id]
+        if 'linked_accounts' in data and str(discord_id) in data['linked_accounts']:
+            del data['linked_accounts'][str(discord_id)]
             self._save_data(data)
 
-    def get_minecraft_username(self, user_id):
-        """Get linked Minecraft username for user"""
+    def get_minecraft_username(self, discord_id):
+        """Get Minecraft username linked to Discord ID"""
         data = self._load_data()
-        return data.get('linked_accounts', {}).get(user_id)
+        return data.get('linked_accounts', {}).get(str(discord_id))
+
+    def get_discord_id_by_minecraft(self, minecraft_username):
+        """Get Discord ID linked to Minecraft username"""
+        data = self._load_data()
+        for discord_id, name in data.get('linked_accounts', {}).items():
+            if name == minecraft_username:
+                return discord_id
+        return None

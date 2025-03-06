@@ -4,6 +4,7 @@ from utils.storage import JsonStorage
 import os
 import hashlib
 import hmac
+import asyncio
 
 class APIServer:
     def __init__(self, storage):
@@ -83,3 +84,7 @@ class APIServer:
         await runner.setup()
         site = web.TCPSite(runner, '0.0.0.0', 5000)
         await site.start()
+        print("API server started on http://0.0.0.0:5000")
+
+        # Добавляем блокировку, чтобы сервер не завершался
+        await asyncio.Event().wait()
