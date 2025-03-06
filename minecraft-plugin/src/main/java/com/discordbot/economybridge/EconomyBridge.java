@@ -15,12 +15,28 @@ import java.net.URI;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.geysermc.floodgate.api.FloodgateApi;
+import github.scarsz.discordsrv.DiscordSRV;
+import github.scarsz.discordsrv.api.Subscribe;
+import github.scarsz.discordsrv.api.events.DiscordGuildMessageReceivedEvent;
+import net.luckperms.api.LuckPerms;
+import net.luckperms.api.LuckPermsProvider;
+import net.coreprotect.CoreProtect;
+import net.coreprotect.CoreProtectAPI;
+import com.sk89q.worldguard.WorldGuard;
+import com.sk89q.worldguard.protection.regions.RegionContainer;
+import com.sk89q.worldguard.protection.flags.registry.FlagRegistry;
+import com.sk89q.worldguard.protection.flags.Flag;
+import com.sk89q.worldguard.protection.flags.StateFlag;
 
 public class EconomyBridge extends JavaPlugin {
     private static String API_URL;
     private static String API_KEY;
     private final HttpClient httpClient = HttpClient.newHttpClient();
     private FloodgateApi floodgateApi;
+    private LuckPerms luckPerms;
+    private DiscordSRV discordSRV;
+    private CoreProtectAPI coreProtect;
+    private StateFlag ALLOW_ECONOMY;
 
     @Override
     public void onEnable() {
@@ -42,6 +58,46 @@ public class EconomyBridge extends JavaPlugin {
             getLogger().warning("Floodgate не найден! Поддержка Bedrock будет ограничена.");
         }
 
+        // Инициализация LuckPerms
+        if (getServer().getPluginManager().getPlugin("LuckPerms") != null) {
+            luckPerms = LuckPermsProvider.get();
+            getLogger().info("LuckPerms API успешно инициализирован");
+        }
+
+        // Инициализация DiscordSRV
+        if (getServer().getPluginManager().getPlugin("DiscordSRV") != null) {
+            discordSRV = DiscordSRV.getPlugin();
+            discordSRV.getMainGuild();
+            getLogger().info("DiscordSRV API успешно инициализирован");
+        }
+
+        // Инициализация CoreProtect
+        if (getServer().getPluginManager().getPlugin("CoreProtect") != null) {
+            CoreProtect coreProtect = (CoreProtect) getServer().getPluginManager().getPlugin("CoreProtect");
+            if (coreProtect != null) {
+                this.coreProtect = coreProtect.getAPI();
+                if (this.coreProtect.isEnabled()) {
+                    getLogger().info("CoreProtect API успешно инициализирован");
+                }
+            }
+        }
+
+        // Инициализация WorldGuard
+        if (getServer().getPluginManager().getPlugin("WorldGuard") != null) {
+            FlagRegistry registry = WorldGuard.getInstance().getFlagRegistry();
+            try {
+                StateFlag flag = new StateFlag("allow-economy", true);
+                registry.register(flag);
+                ALLOW_ECONOMY = flag;
+                getLogger().info("WorldGuard флаг 'allow-economy' успешно зарегистрирован");
+            } catch (Exception e) {
+                Flag<?> existing = registry.get("allow-economy");
+                if (existing instanceof StateFlag) {
+                    ALLOW_ECONOMY = (StateFlag) existing;
+                }
+            }
+        }
+
         // Регистрация команд
         getCommand("balance").setExecutor((sender, cmd, label, args) -> {
             if (!(sender instanceof Player)) {
@@ -56,12 +112,23 @@ public class EconomyBridge extends JavaPlugin {
                 return true;
             }
 
+            // Проверка WorldGuard региона
+            if (!canUseEconomyInRegion(player)) {
+                player.sendMessage("§cВы не можете использовать экономику в этом регионе!");
+                return true;
+            }
+
             try {
                 int balance = getBalance(player.getUniqueId().toString());
                 String message = getConfig().getString("messages.balance", "&aВаш баланс: &f%balance% монет")
                     .replace("%balance%", String.valueOf(balance))
                     .replace('&', '§');
                 player.sendMessage(message);
+
+                // Логирование в CoreProtect
+                if (coreProtect != null) {
+                    coreProtect.logCommand(player.getName(), "/balance");
+                }
             } catch (Exception e) {
                 player.sendMessage("§cОшибка при получении баланса: " + e.getMessage());
             }
@@ -120,6 +187,11 @@ public class EconomyBridge extends JavaPlugin {
                     return "N/A";
                 }
 
+                // Проверка WorldGuard региона
+                if (player.isOnline() && !canUseEconomyInRegion(player.getPlayer())) {
+                    return "N/A";
+                }
+
                 if (identifier.equals("balance")) {
                     try {
                         return String.valueOf(getBalance(player.getUniqueId().toString()));
@@ -140,6 +212,18 @@ public class EconomyBridge extends JavaPlugin {
             return floodgateApi.isFloodgatePlayer(player.getUniqueId());
         }
         return false;
+    }
+
+    private boolean canUseEconomyInRegion(Player player) {
+        if (ALLOW_ECONOMY == null) return true;
+        RegionContainer container = WorldGuard.getInstance().getPlatform().getRegionContainer();
+        return container.createQuery().testState(
+            com.sk89q.worldedit.bukkit.BukkitAdapter.adapt(player.getLocation()),
+            WorldGuard.getInstance().getPlatform().getSessionManager().get(
+                com.sk89q.worldedit.bukkit.BukkitAdapter.adapt(player)
+            ),
+            ALLOW_ECONOMY
+        );
     }
 
     private int getBalance(String userId) throws Exception {
@@ -172,5 +256,14 @@ public class EconomyBridge extends JavaPlugin {
             hash.append(hex);
         }
         return hash.toString();
+    }
+
+    @Subscribe
+    public void onDiscordMessage(DiscordGuildMessageReceivedEvent event) {
+        // Обработка сообщений из Discord для синхронизации экономики
+        if (event.getMessage().getContentRaw().startsWith("!balance")) {
+            // Здесь можно добавить логику обработки команд из Discord
+            getLogger().info("Получена команда баланса из Discord");
+        }
     }
 }

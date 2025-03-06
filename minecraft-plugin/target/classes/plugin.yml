@@ -2,8 +2,8 @@ name: EconomyBridge
 version: '${project.version}'
 main: com.discordbot.economybridge.EconomyBridge
 api-version: '1.20'
-depend: [PlaceholderAPI, floodgate]
-softdepend: [Geyser-Spigot]
+depend: [PlaceholderAPI, floodgate, Vault]
+softdepend: [Geyser-Spigot, DiscordSRV, LuckPerms]
 commands:
   balance:
     description: Показать ваш баланс
