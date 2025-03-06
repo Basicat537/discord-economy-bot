@@ -1,0 +1,27 @@
+name: EconomyBridge
+version: '${project.version}'
+main: com.discordbot.economybridge.EconomyBridge
+api-version: '1.20'
+depend: [PlaceholderAPI, floodgate]
+softdepend: [Geyser-Spigot]
+commands:
+  balance:
+    description: Показать ваш баланс
+    usage: /balance
+    aliases: [bal, money]
+  pay:
+    description: Перевести деньги другому игроку
+    usage: /pay <игрок> <сумма>
+  reward:
+    description: Получить награду за игровое время
+    usage: /reward
+  checkapi:
+    description: Проверить работу API (только для администраторов)
+    usage: /checkapi
+    permission: economybridge.admin
+    permission-message: §cУ вас нет прав для использования этой команды!
+
+permissions:
+  economybridge.admin:
+    description: Доступ к административным командам плагина
+    default: op

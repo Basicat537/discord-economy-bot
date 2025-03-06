@@ -1,0 +1,28 @@
+# Конфигурация EconomyBridge
+
+# URL API Discord бота
+api:
+  url: 'http://localhost:5000'
+  key: '' # Будет установлен через переменную окружения
+
+# Настройки плейсхолдеров
+placeholders:
+  balance: '%economy_balance%'
+
+# Интервал обновления данных (в секундах)
+update_interval: 30
+
+# Формат сообщений
+messages:
+  balance: '&aВаш баланс: &f%economy_balance% монет'
+  pay_success: '&aВы перевели &f%amount% монет&a игроку &f%player%'
+  pay_error: '&cОшибка при переводе: %error%'
+  reward_success: '&aВы получили &f%amount% монет&a в качестве награды!'
+  reward_error: '&cОшибка при получении награды: %error%'
+
+# Настройки для Bedrock игроков
+bedrock:
+  # Префикс для отображения Bedrock игроков (если нужно)
+  prefix: '&7[BE] &r'
+  # Разрешить ли Bedrock игрокам использовать экономику
+  enabled: true
