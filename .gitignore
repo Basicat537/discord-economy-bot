@@ -1,0 +1,56 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Environment variables
+.env
+.venv
+.env.local
+.env.*.local
+
+# Logs
+logs/
+*.log
+
+# Database
+*.db
+*.sqlite3
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Minecraft Plugin
+minecraft-plugin/target/
+minecraft-plugin/.settings/
+minecraft-plugin/.classpath
+minecraft-plugin/.project
+
+# Discord bot specific
+data/*.json
+config.local.yml
+
+# Replit specific
+.replit
+.breakpoints
+replit.nix
