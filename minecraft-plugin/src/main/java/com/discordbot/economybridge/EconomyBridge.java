@@ -5,34 +5,28 @@ import me.clip.placeholderapi.expansion.PlaceholderExpansion;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
 import org.bukkit.configuration.file.FileConfiguration;
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
-import java.nio.charset.StandardCharsets;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.net.URI;
-import org.json.simple.JSONObject;
-import org.json.simple.parser.JSONParser;
 import org.geysermc.floodgate.api.FloodgateApi;
-import github.scarsz.discordsrv.DiscordSRV;
-import github.scarsz.discordsrv.api.Subscribe;
-import github.scarsz.discordsrv.api.events.DiscordGuildMessageReceivedEvent;
-import net.luckperms.api.LuckPerms;
-import net.luckperms.api.LuckPermsProvider;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+import java.nio.charset.StandardCharsets;
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
 
 public class EconomyBridge extends JavaPlugin {
     private static String API_URL;
     private static String API_KEY;
     private final HttpClient httpClient = HttpClient.newHttpClient();
+    private final Gson gson = new Gson();
     private FloodgateApi floodgateApi;
-    private LuckPerms luckPerms;
-    private DiscordSRV discordSRV;
 
     @Override
     public void onEnable() {
         saveDefaultConfig();
-        API_URL = getConfig().getString("api.url");
+        API_URL = getConfig().getString("api.url", "http://localhost:5000");
         API_KEY = System.getenv("API_KEY");
 
         if (API_KEY == null || API_KEY.isEmpty()) {
@@ -47,19 +41,6 @@ public class EconomyBridge extends JavaPlugin {
             getLogger().info("Floodgate API успешно инициализирован");
         } else {
             getLogger().warning("Floodgate не найден! Поддержка Bedrock будет ограничена.");
-        }
-
-        // Инициализация LuckPerms
-        if (getServer().getPluginManager().getPlugin("LuckPerms") != null) {
-            luckPerms = LuckPermsProvider.get();
-            getLogger().info("LuckPerms API успешно инициализирован");
-        }
-
-        // Инициализация DiscordSRV
-        if (getServer().getPluginManager().getPlugin("DiscordSRV") != null) {
-            discordSRV = DiscordSRV.getPlugin();
-            discordSRV.getMainGuild();
-            getLogger().info("DiscordSRV API успешно инициализирован");
         }
 
         // Регистрация команд
@@ -88,6 +69,59 @@ public class EconomyBridge extends JavaPlugin {
             return true;
         });
 
+        getCommand("pay").setExecutor((sender, cmd, label, args) -> {
+            if (!(sender instanceof Player)) {
+                sender.sendMessage("Эта команда только для игроков!");
+                return true;
+            }
+            if (args.length != 2) {
+                return false;
+            }
+
+            Player from = (Player) sender;
+            Player to = getServer().getPlayer(args[0]);
+            if (to == null) {
+                from.sendMessage("§cИгрок не найден!");
+                return true;
+            }
+
+            try {
+                int amount = Integer.parseInt(args[1]);
+                if (amount <= 0) {
+                    from.sendMessage("§cСумма должна быть положительной!");
+                    return true;
+                }
+
+                // Отправляем запрос на перевод через API
+                JsonObject requestBody = new JsonObject();
+                requestBody.addProperty("from_id", from.getUniqueId().toString());
+                requestBody.addProperty("to_id", to.getUniqueId().toString());
+                requestBody.addProperty("amount", amount);
+
+                HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(API_URL + "/transfer"))
+                    .header("Content-Type", "application/json")
+                    .header("X-Signature", generateSignature(requestBody.toString()))
+                    .POST(HttpRequest.BodyPublishers.ofString(requestBody.toString()))
+                    .build();
+
+                HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+                if (response.statusCode() == 200) {
+                    from.sendMessage(String.format("§aВы перевели §f%d монет§a игроку §f%s", amount, to.getName()));
+                    to.sendMessage(String.format("§aВы получили §f%d монет§a от игрока §f%s", amount, from.getName()));
+                } else {
+                    from.sendMessage("§cОшибка при переводе: " + response.body());
+                }
+            } catch (NumberFormatException e) {
+                from.sendMessage("§cНекорректная сумма!");
+                return true;
+            } catch (Exception e) {
+                from.sendMessage("§cОшибка при переводе: " + e.getMessage());
+                getLogger().warning("Ошибка при переводе: " + e.getMessage());
+            }
+            return true;
+        });
 
         // Регистрация PlaceholderAPI расширения
         new PlaceholderExpansion() {
@@ -111,7 +145,7 @@ public class EconomyBridge extends JavaPlugin {
                 if (player == null) return "";
 
                 // Проверка настроек для Bedrock игроков
-                if (player.isOnline() && isBedrockPlayer(player.getPlayer()) && 
+                if (player.isOnline() && isBedrockPlayer(player.getPlayer()) &&
                     !getConfig().getBoolean("bedrock.enabled", true)) {
                     return "N/A";
                 }
@@ -128,7 +162,7 @@ public class EconomyBridge extends JavaPlugin {
             }
         }.register();
 
-        getLogger().info("EconomyBridge успешно загружен!");
+        getLogger().info("EconomyBridge успешно включен!");
     }
 
     private boolean isBedrockPlayer(Player player) {
@@ -152,7 +186,12 @@ public class EconomyBridge extends JavaPlugin {
             throw new Exception("API вернул код ошибки: " + response.statusCode());
         }
 
-        return Integer.parseInt(response.body());
+        try {
+            JsonObject jsonResponse = gson.fromJson(response.body(), JsonObject.class);
+            return jsonResponse.get("balance").getAsInt();
+        } catch (Exception e) {
+            throw new Exception("Ошибка при разборе ответа API: " + e.getMessage());
+        }
     }
 
     private String generateSignature(String data) throws Exception {
@@ -168,14 +207,5 @@ public class EconomyBridge extends JavaPlugin {
             hash.append(hex);
         }
         return hash.toString();
-    }
-
-    @Subscribe
-    public void onDiscordMessage(DiscordGuildMessageReceivedEvent event) {
-        // Обработка сообщений из Discord для синхронизации экономики
-        if (event.getMessage().getContentRaw().startsWith("!balance")) {
-            // Здесь можно добавить логику обработки команд из Discord
-            getLogger().info("Получена команда баланса из Discord");
-        }
     }
 }

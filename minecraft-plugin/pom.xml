@@ -34,21 +34,6 @@
             <id>opencollab-snapshot-repo</id>
             <url>https://repo.opencollab.dev/maven-snapshots/</url>
         </repository>
-        <!-- Репозиторий DiscordSRV -->
-        <repository>
-            <id>Scarsz-Nexus</id>
-            <url>https://nexus.scarsz.me/content/groups/public/</url>
-        </repository>
-        <!-- Репозиторий Vault -->
-        <repository>
-            <id>jitpack.io</id>
-            <url>https://jitpack.io</url>
-        </repository>
-        <!-- Репозиторий LuckPerms -->
-        <repository>
-            <id>lucko</id>
-            <url>https://repo.lucko.me/</url>
-        </repository>
     </repositories>
 
     <dependencies>
@@ -56,7 +41,7 @@
         <dependency>
             <groupId>org.purpurmc.purpur</groupId>
             <artifactId>purpur-api</artifactId>
-            <version>1.20.4-R0.1-SNAPSHOT</version>
+            <version>1.21.4-R0.1-SNAPSHOT</version>
             <scope>provided</scope>
         </dependency>
         <!-- PlaceholderAPI -->
@@ -73,26 +58,10 @@
             <version>2.2.4-SNAPSHOT</version>
             <scope>provided</scope>
         </dependency>
-        <!-- DiscordSRV -->
         <dependency>
-            <groupId>com.discordsrv</groupId>
-            <artifactId>discordsrv</artifactId>
-            <version>1.29.0</version>
-            <scope>provided</scope>
-        </dependency>
-        <!-- Vault -->
-        <dependency>
-            <groupId>com.github.MilkBowl</groupId>
-            <artifactId>VaultAPI</artifactId>
-            <version>1.7</version>
-            <scope>provided</scope>
-        </dependency>
-        <!-- LuckPerms -->
-        <dependency>
-            <groupId>net.luckperms</groupId>
-            <artifactId>api</artifactId>
-            <version>5.4</version>
-            <scope>provided</scope>
+            <groupId>com.google.code.gson</groupId>
+            <artifactId>gson</artifactId>
+            <version>2.10.1</version>
         </dependency>
     </dependencies>
 

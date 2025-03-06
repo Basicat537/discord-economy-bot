@@ -9,13 +9,15 @@ class APIServer:
     def __init__(self, storage):
         self.app = web.Application()
         self.storage = storage
-        self.api_key = os.getenv('API_KEY', 'default_key')  # Для безопасной коммуникации
+        self.api_key = os.getenv('API_KEY')  # Получаем ключ из переменной окружения
+        if not self.api_key:
+            raise ValueError("API_KEY environment variable is not set!")
         self.setup_routes()
 
     def setup_routes(self):
         self.app.router.add_get('/balance/{user_id}', self.get_balance)
-        self.app.router.add_post('/balance/modify', self.modify_balance)
-        self.app.router.add_get('/balance/test', self.test_connection)  # Добавляем тестовый эндпоинт
+        self.app.router.add_post('/transfer', self.transfer_money)
+        self.app.router.add_get('/test', self.test_connection)
 
     def verify_signature(self, data, signature):
         """Verify request signature for security"""
@@ -29,11 +31,9 @@ class APIServer:
     async def test_connection(self, request):
         """Test endpoint to verify API connectivity"""
         signature = request.headers.get('X-Signature')
-
         if not signature or not self.verify_signature('test', signature):
             return web.Response(status=403, text='Invalid signature')
-
-        return web.Response(text='API is working!')
+        return web.json_response({'status': 'ok', 'message': 'API is working!'})
 
     async def get_balance(self, request):
         """Get user balance endpoint"""
@@ -44,32 +44,36 @@ class APIServer:
             return web.Response(status=403, text='Invalid signature')
 
         balance = self.storage.get_user_balance(user_id)
-        return web.Response(text=str(balance))
+        return web.json_response({'balance': balance})
 
-    async def modify_balance(self, request):
-        """Modify user balance endpoint"""
+    async def transfer_money(self, request):
+        """Transfer money between users"""
         try:
             data = await request.json()
             signature = request.headers.get('X-Signature')
 
-            if not signature or not self.verify_signature(
-                f"{data['user_id']}{data['amount']}{data['operation']}", 
-                signature
-            ):
+            signature_data = f"{data['from_id']}{data['to_id']}{data['amount']}"
+            if not signature or not self.verify_signature(signature_data, signature):
                 return web.Response(status=403, text='Invalid signature')
 
-            user_id = data['user_id']
+            from_id = data['from_id']
+            to_id = data['to_id']
             amount = int(data['amount'])
-            operation = data['operation']
 
-            if operation == 'add':
-                self.storage.add_coins(user_id, amount)
-            elif operation == 'remove':
-                self.storage.remove_coins(user_id, amount)
-            else:
-                return web.Response(status=400, text='Invalid operation')
+            if amount <= 0:
+                return web.Response(status=400, text='Amount must be positive')
 
-            return web.Response(text='Success')
+            try:
+                self.storage.transfer_coins(from_id, to_id, amount)
+                return web.json_response({
+                    'status': 'success',
+                    'message': 'Transfer completed',
+                    'from_balance': self.storage.get_user_balance(from_id),
+                    'to_balance': self.storage.get_user_balance(to_id)
+                })
+            except ValueError as e:
+                return web.Response(status=400, text=str(e))
+
         except Exception as e:
             return web.Response(status=400, text=str(e))
 
@@ -78,6 +82,4 @@ class APIServer:
         runner = web.AppRunner(self.app)
         await runner.setup()
         site = web.TCPSite(runner, '0.0.0.0', 5000)
-        print("Starting API server on http://0.0.0.0:5000")  # Добавляем лог
         await site.start()
-        print("API server started successfully")  # Добавляем лог
